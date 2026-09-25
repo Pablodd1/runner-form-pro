@@ -129,6 +129,20 @@ export function calculateKneeValgus(hip: Landmark3D, knee: Landmark3D, ankle: La
 }
 
 /**
+ * Calculates Shin Angle at touchdown (Tibia inclination from true gravitational vertical).
+ * Dr. JP Gloria DPT Rule:
+ * - Optimal contact: 0° - 8° forward inclination (tibia is near perpendicular to ground, absorbing impact).
+ * - Severe overstride / braking: > 12° forward inclination (landing foot outstretched ahead of knee).
+ */
+export function calculateShinAngle(knee: Landmark3D, ankle: Landmark3D): number {
+  const dx = Math.abs(ankle.x - knee.x);
+  const dy = Math.abs(ankle.y - knee.y) || 0.001;
+  const rad = Math.atan2(dx, dy);
+  const deg = (rad * 180) / Math.PI;
+  return Math.round(deg * 10) / 10;
+}
+
+/**
  * Calculates Foot Strike Angle (FSA in degrees) relative to horizontal surface.
  * > +8 deg: Rearfoot (Heel strike)
  * -1.5 to +8 deg: Midfoot strike
@@ -224,6 +238,8 @@ export function extractJointAngles(landmarks: Landmark3D[]): JointAngles {
   const pelvicTilt = calculatePelvicTilt(lHip, rHip);
   const leftKneeValgus = calculateKneeValgus(lHip, lKnee, lAnkle);
   const rightKneeValgus = calculateKneeValgus(rHip, rKnee, rAnkle);
+  const leftShinAngle = calculateShinAngle(lKnee, lAnkle);
+  const rightShinAngle = calculateShinAngle(rKnee, rAnkle);
 
   return {
     leftKnee,
@@ -238,6 +254,8 @@ export function extractJointAngles(landmarks: Landmark3D[]): JointAngles {
     rightArmSwing,
     leftKneeValgus,
     rightKneeValgus,
+    leftShinAngle,
+    rightShinAngle,
   };
 }
 

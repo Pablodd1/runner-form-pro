@@ -22,6 +22,7 @@ export interface DynamicGaitFrameResult {
   rightFootStrike: FootStrikeType;
   peakSwingKneeFlexionDeg: number;
   overstrideDistanceCm: number;
+  shinAngleAtTouchdownDeg: number;
 }
 
 interface FrameRecord {
@@ -199,6 +200,9 @@ export class RunningGaitKinematicsTracker {
     const frontAnkleX = Math.max(lAnkle.x, rAnkle.x);
     const overstrideCm = Math.round(Math.max(0, (frontAnkleX - hipMidX) * scaleFactor * 0.4));
 
+    // 12. Shin Angle at Touchdown (Dr. JP Gloria DPT metric)
+    const activeShinAngle = lAnkle.y >= rAnkle.y ? angles.leftShinAngle : angles.rightShinAngle;
+
     return {
       instantaneousSpeedKmh: currentSpeed,
       cadenceSpm: currentCadence,
@@ -218,6 +222,7 @@ export class RunningGaitKinematicsTracker {
       rightFootStrike,
       peakSwingKneeFlexionDeg: Math.round(maxKneeFlexion),
       overstrideDistanceCm: overstrideCm,
+      shinAngleAtTouchdownDeg: activeShinAngle,
     };
   }
 

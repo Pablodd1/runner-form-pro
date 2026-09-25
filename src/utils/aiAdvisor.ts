@@ -37,15 +37,16 @@ export function evaluateRealTimeAlerts(
     });
   }
 
-  // 2. Overstriding (Landing foot > 16 cm ahead of center of mass)
-  if (metrics.overstrideDistanceCm > 16 && !isRecentlyTriggered('overstride')) {
+  // 2. Overstriding & Tibial Braking Angle (Dr. JP Gloria DPT Protocol)
+  const shinAngle = metrics.shinAngleAtTouchdownDeg || 0;
+  if ((metrics.overstrideDistanceCm > 16 || shinAngle > 11.5) && !isRecentlyTriggered('overstride')) {
     alerts.push({
       id: `overstride-${now}`,
       type: 'overstride',
-      severity: metrics.overstrideDistanceCm > 22 ? 'high' : 'moderate',
-      title: `Excessive Overstriding (+${metrics.overstrideDistanceCm}cm)`,
-      description: 'Foot contact point lands excessively forward of the pelvic center of mass, generating sharp braking forces and tibial impact shock.',
-      correctiveDrill: 'Increase cadence by 5-8% to draw landing foot directly under hips.',
+      severity: metrics.overstrideDistanceCm > 22 || shinAngle > 15 ? 'high' : 'moderate',
+      title: `Excessive Overstride & Tibial Braking (${shinAngle > 0 ? `${shinAngle}° shin` : `+${metrics.overstrideDistanceCm}cm`})`,
+      description: 'Landing foot contacts too far ahead of the center of mass with an outstretched tibia. Dr. JP Gloria DPT protocol: Keep the tibia near-vertical (<8° from vertical) upon impact to eliminate tibial shock and braking impulse.',
+      correctiveDrill: `Increase cadence by 5-8% (target ~${Math.round(metrics.cadenceSpm * 1.06)} SPM); practice "Paw-back" wall drills and A-Skips with landing under the pelvis.`,
       timestamp: now,
     });
   }
@@ -57,8 +58,8 @@ export function evaluateRealTimeAlerts(
       type: 'pelvic_drop',
       severity: metrics.angles.pelvicTilt > 7 ? 'high' : 'moderate',
       title: `Contralateral Pelvic Drop (${metrics.angles.pelvicTilt}°)`,
-      description: 'Excessive lateral dip of the non-weight-bearing hip. Indicates gluteus medius weakness and increases IT band friction risk.',
-      correctiveDrill: 'Lateral monster walks with resistance bands & single-leg pelvic drop-and-lift drills.',
+      description: 'Excessive lateral dip of the non-weight-bearing hip indicates gluteus medius weakness, causing rotational kinetic leakage and IT band strain.',
+      correctiveDrill: 'Dr. JP Gloria Drill: Lateral monster walks with resistance bands, single-leg pelvic drop-and-lift drills, and cueing active torso counter-rotation.',
       timestamp: now,
     });
   }
@@ -103,15 +104,31 @@ export function evaluateRealTimeAlerts(
     });
   }
 
-  // 7. Low Cadence (< 158 SPM at speed)
-  if (metrics.cadenceSpm < 158 && !isRecentlyTriggered('cadence_low')) {
+  // 7. Dynamic Cadence Deficit (Dr. JP Gloria +5% to +8% Calibration)
+  if (metrics.cadenceSpm < 160 && !isRecentlyTriggered('cadence_low')) {
+    const targetCadence = Math.round(metrics.cadenceSpm * 1.07);
     alerts.push({
       id: `cadence-${now}`,
       type: 'cadence_low',
       severity: 'low',
       title: `Cadence Below Target (${metrics.cadenceSpm} SPM)`,
-      description: 'Low stride frequency elongates ground contact time and increases joint impact load per foot strike.',
-      correctiveDrill: 'Practice running to a 170-175 BPM audio metronome beat.',
+      description: `Stride frequency is below the optimal threshold for current velocity, increasing ground contact time and joint impact. Dr. JP Gloria advises a progressive +5% to +8% increase rather than forcing a dogmatic 180 SPM.`,
+      correctiveDrill: `Progressive +6% target: Run to a ${targetCadence} BPM audio metronome beat for 5-minute training intervals.`,
+      timestamp: now,
+    });
+  }
+
+  // 8. Lumbar Flexion vs Ankle Lean (Trunk Lean Check)
+  if ((metrics.angles.trunkLean > 14 || metrics.angles.trunkLean < 2) && !isRecentlyTriggered('excessive_lean')) {
+    alerts.push({
+      id: `lean-${now}`,
+      type: 'excessive_lean',
+      severity: 'low',
+      title: metrics.angles.trunkLean > 14 ? `Excessive Trunk Hinge (${metrics.angles.trunkLean}°)` : `Upright / Backward Lean (${metrics.angles.trunkLean}°)`,
+      description: metrics.angles.trunkLean > 14 
+        ? 'Bending forward from the lumbar waist compresses the hip flexors and limits posterior chain glute extension. Dr. JP Gloria cue: Lean forward from the ankles, not the waist.' 
+        : 'Running upright with zero forward tilt forces braking on touchdown. Initiate a slight 5°-8° forward lean from the ankles.',
+      correctiveDrill: 'Wall Ankle-Hinge Leans & tall posture cues before interval runs.',
       timestamp: now,
     });
   }
@@ -203,6 +220,13 @@ export function generateEvaluationReport(
       rightHipAvgFlexion: 44,
       predominantStrike: 'midfoot',
       avgFootStrikeAngleDeg: 3.8,
+      avgShinAngleDeg: 6.8,
+      clinicalDptNotes: {
+        shinAngleVerdict: 'Optimal near-vertical tibia at touchdown (6.8° from vertical). Minimal braking force vector.',
+        cadencePrescription: 'Baseline: 172 SPM. Prescribed DPT Target: 182 SPM (+6% progressive cadence shift).',
+        tissueLoadRecommendation: 'Midfoot strike distributes impact evenly between ankle plantarflexors and knee extensor complex.',
+        fiveTwentyRuleNotice: 'Dr. JP Gloria 5-20 Load Rule: Discomfort during runs should remain ≤3/10 and settle back to baseline within 24 hours without joint swelling.',
+      },
       alertsDetected: allAlerts,
       prescribedDrills: getRecommendedDrills(),
       snapshotDataUrl,
@@ -263,6 +287,22 @@ export function generateEvaluationReport(
     sprintSeconds: Math.round((sprintFrames / totalF) * 60),
   };
 
+  const avgShinAngle = Math.round((frameHistory.reduce((s, f) => s + (f.shinAngleAtTouchdownDeg || 6.2), 0) / count) * 10) / 10;
+  const targetCadence = Math.round(avgCadence * 1.06);
+
+  const clinicalDptNotes = {
+    shinAngleVerdict: avgShinAngle <= 8.5
+      ? `Optimal near-vertical tibia (${avgShinAngle}° from vertical). Ground reaction force aligns through knee axis with minimal braking shear.`
+      : `Outstretched tibia (${avgShinAngle}° from vertical). Generates braking impulse and patellofemoral shock; apply Dr. Gloria's +5-8% cadence cue.`,
+    cadencePrescription: `Current baseline: ${avgCadence} SPM. DPT Prescription: ${targetCadence} SPM (+6% progressive cadence shift to draw foot strike directly beneath pelvic center of mass).`,
+    tissueLoadRecommendation: predominantStrike === 'heel'
+      ? 'Rearfoot heel strike concentrates deceleration load into patellofemoral cartilage and tibial shaft. Ensure adequate quad eccentric capacity.'
+      : predominantStrike === 'forefoot'
+      ? 'Forefoot strike redistributes load to the Achilles tendon, gastrocnemius-soleus complex, and plantar fascia. Maintain eccentric calf loading.'
+      : 'Midfoot strike evenly distributes vertical ground reaction forces across knee extensors and ankle plantarflexors.',
+    fiveTwentyRuleNotice: 'Dr. JP Gloria 5-20 Load Rule: Running-related soreness should remain ≤3/10 during activity and return to baseline within 24 hours without joint effusion.',
+  };
+
   return {
     profile,
     testType: 'runner_form',
@@ -286,6 +326,8 @@ export function generateEvaluationReport(
     rightHipAvgFlexion: rightHipAvg,
     predominantStrike,
     avgFootStrikeAngleDeg: avgStrikeAngle,
+    avgShinAngleDeg: avgShinAngle,
+    clinicalDptNotes,
     peakSpeedKmh,
     minSpeedKmh,
     speedPaceBreakdown,
@@ -298,28 +340,28 @@ export function generateEvaluationReport(
 function getRecommendedDrills() {
   return [
     {
-      title: 'A-Skips & High Knee Rhythm',
-      focus: 'Knee Drive & Midfoot Landing',
-      instructions: 'Skip rhythmically while driving lead knee up to 90 degrees with dorsiflexed ankle. Land directly under hips.',
+      title: 'A-Skips with Vertical Shin Touchdown',
+      focus: 'Knee Drive & Shin Angle Alignment (Dr. JP Gloria)',
+      instructions: 'Skip rhythmically while driving lead knee up to 90 degrees with dorsiflexed ankle. Actively pull the foot down and back to land with a vertical tibia directly beneath your hips.',
       frequency: '3 sets of 20 meters before each run',
     },
     {
-      title: 'Cadence Metronome Calibration',
-      focus: 'Step Frequency Optimization',
-      instructions: 'Run at a rhythm synced to 170-175 BPM sound cues. Shorter, quicker strides naturally reduce impact shock.',
+      title: 'Dynamic Cadence +5% to +8% Calibration',
+      focus: 'Step Frequency & Impact Mitigation (Dr. JP Gloria)',
+      instructions: 'Sync foot strikes to an audio metronome calibrated 5% to 8% above your current baseline. Shorter, quicker strides naturally reduce overstriding and patellofemoral braking force.',
       frequency: '10-minute segment 3x per week',
     },
     {
-      title: 'Lateral Band Walks & Single-Leg Glute Bridges',
-      focus: 'Pelvic Stability & Asymmetry Correction',
-      instructions: 'Strengthen gluteus medius to eliminate hip drop. 15 reps per side with controlled isometric hold.',
-      frequency: 'Daily post-run or mobility sessions',
+      title: 'Banded Monster Walks & Single-Leg Drop-Lifts',
+      focus: 'Pelvic Stability & Gluteus Medius Control',
+      instructions: 'Eliminate Trendelenburg hip drop by activating gluteus medius. Stand on a box or step with one leg hanging, lower the pelvis down 2 inches and drive back up to neutral using hip abductors.',
+      frequency: '3 sets of 12 reps per side post-run',
     },
     {
-      title: 'Forward Lean Ankle Drill',
-      focus: 'Gravitational Propulsion & Trunk Posture',
-      instructions: 'Lean forward slightly from the ankles (not bending at hips) to let gravity pull momentum forward smoothly.',
-      frequency: '2 sets of 30 seconds static cue before intervals',
+      title: 'Ankle-Hinged Forward Lean Wall Drill',
+      focus: 'Gravitational Propulsion without Waist Hinge',
+      instructions: 'Position hands against a wall at shoulder height. Lean whole body forward from the ankles at a 5-8 degree angle while maintaining a straight line from ears through hips to ankles.',
+      frequency: '2 sets of 30 seconds static cue before speed intervals',
     },
   ];
 }

@@ -298,6 +298,8 @@ export const App: React.FC = () => {
                           rightArmSwing: 90,
                           leftKneeValgus: 1.2,
                           rightKneeValgus: 1.5,
+                          leftShinAngle: 6.5,
+                          rightShinAngle: 6.8,
                         }
                       }
                     />

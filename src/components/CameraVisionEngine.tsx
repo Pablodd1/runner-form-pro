@@ -392,6 +392,7 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
       leftFootStrike: dynamicGait.leftFootStrike,
       rightFootStrike: dynamicGait.rightFootStrike,
       overstrideDistanceCm: dynamicGait.overstrideDistanceCm,
+      shinAngleAtTouchdownDeg: dynamicGait.shinAngleAtTouchdownDeg,
       instantaneousSpeedKmh: dynamicGait.instantaneousSpeedKmh,
       gaitPaceCategory: dynamicGait.gaitPaceCategory,
       angles,

@@ -38,6 +38,8 @@ export interface JointAngles {
   rightArmSwing: number;
   leftKneeValgus: number; // frontal plane inward collapse
   rightKneeValgus: number;
+  leftShinAngle: number;  // Tibia inclination from vertical at stance (Dr. JP Gloria metric)
+  rightShinAngle: number;
 }
 
 export interface PowerBreakdown {
@@ -63,6 +65,7 @@ export interface BiomechanicsFrameMetrics {
   leftFootStrike: FootStrikeType;
   rightFootStrike: FootStrikeType;
   overstrideDistanceCm: number; // distance foot lands ahead of center of mass
+  shinAngleAtTouchdownDeg?: number; // Tibia angle relative to vertical at foot strike (Dr. JP Gloria DPT metric)
   instantaneousSpeedKmh?: number; // Real-time estimated speed
   gaitPaceCategory?: 'recovery' | 'aerobic_jog' | 'tempo' | 'fast_run' | 'sprint';
   angles: JointAngles;
@@ -85,7 +88,7 @@ export interface VerticalJumpMetrics {
 
 export interface DiscrepancyAlert {
   id: string;
-  type: 'asymmetry' | 'overstride' | 'vertical_bounce' | 'arm_crossover' | 'pelvic_drop' | 'cadence_low' | 'excessive_lean' | 'knee_valgus' | 'energy_leak';
+  type: 'asymmetry' | 'overstride' | 'vertical_bounce' | 'arm_crossover' | 'pelvic_drop' | 'cadence_low' | 'excessive_lean' | 'knee_valgus' | 'energy_leak' | 'shin_angle' | 'tissue_load';
   severity: 'low' | 'moderate' | 'high';
   title: string;
   description: string;
@@ -116,6 +119,13 @@ export interface EvaluationSummary {
   rightHipAvgFlexion: number;
   predominantStrike: FootStrikeType;
   avgFootStrikeAngleDeg: number;
+  avgShinAngleDeg?: number; // Tibia inclination angle at touchdown (Dr. JP Gloria metric)
+  clinicalDptNotes?: {
+    shinAngleVerdict: string;
+    cadencePrescription: string;
+    tissueLoadRecommendation: string;
+    fiveTwentyRuleNotice: string;
+  };
   peakSpeedKmh?: number;
   minSpeedKmh?: number;
   speedPaceBreakdown?: {

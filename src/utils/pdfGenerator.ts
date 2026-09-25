@@ -188,6 +188,7 @@ export function exportEvaluationPDF(summary: EvaluationSummary) {
       ['Leg Spring Stiffness (K_leg)', `${summary.avgLegStiffnessKnM || 18.5} kN/m`, '16 - 26 kN/m', 'Spring-Mass Elastic'],
       ['Peak Ground Reaction Force', `${summary.avgGroundReactionForceBw || 2.4}x BW`, '2.2 - 2.8x BW', 'Normal Impact'],
       ['Ground Contact Time (GCT)', `${summary.avgGroundContactTimeMs} ms`, '190 - 240 ms', summary.avgGroundContactTimeMs <= 245 ? 'Elastic / Fast' : 'Prolonged'],
+      ['Touchdown Shin Angle (Tibia Tilt)', `${summary.avgShinAngleDeg ?? 6.5}° from vertical`, '< 8.0° (Dr. JP Gloria DPT)', (summary.avgShinAngleDeg ?? 6.5) <= 8.5 ? 'Minimal Braking' : 'Tibial Shock Alert'],
       ['Trunk Forward Lean', `${summary.avgTrunkLeanDeg}°`, '5.0° - 10.0°', 'Balanced'],
       ['Foot Strike Angle (FSA)', `${summary.avgFootStrikeAngleDeg || 4.2}° (${summary.predominantStrike.toUpperCase()})`, 'Midfoot strike', 'Low Impact'],
       ['Bilateral Symmetry Index', `${summary.bilateralSymmetryPct}%`, '> 90%', summary.bilateralSymmetryPct >= 90 ? 'Symmetrical' : 'Asymmetry Alert'],
@@ -269,6 +270,55 @@ export function exportEvaluationPDF(summary: EvaluationSummary) {
 
       currentY += 15;
     });
+  }
+
+  // Dr. JP Gloria DPT Clinical Framework Insights
+  if (!isJumpTest && summary.clinicalDptNotes) {
+    if (currentY > 215) {
+      doc.addPage();
+      currentY = 18;
+    }
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text('DR. JP GLORIA, DPT — CLINICAL GAIT FRAMEWORK', 14, currentY);
+    currentY += 4;
+
+    doc.setFillColor(240, 249, 255);
+    doc.setDrawColor(186, 230, 253);
+    doc.roundedRect(14, currentY, pageWidth - 28, 25, 2, 2, 'FD');
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(3, 105, 161);
+    doc.text('• Tibial Shin Angle:', 18, currentY + 5.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(51, 65, 85);
+    doc.text(summary.clinicalDptNotes.shinAngleVerdict.slice(0, 85), 46, currentY + 5.5);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(3, 105, 161);
+    doc.text('• Cadence (+5-8%):', 18, currentY + 11);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(51, 65, 85);
+    doc.text(summary.clinicalDptNotes.cadencePrescription.slice(0, 85), 46, currentY + 11);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(3, 105, 161);
+    doc.text('• Tissue Load Vector:', 18, currentY + 16.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(51, 65, 85);
+    doc.text(summary.clinicalDptNotes.tissueLoadRecommendation.slice(0, 85), 48, currentY + 16.5);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(3, 105, 161);
+    doc.text('• 5-20 Load Rule:', 18, currentY + 22);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(51, 65, 85);
+    doc.text(summary.clinicalDptNotes.fiveTwentyRuleNotice.slice(0, 85), 44, currentY + 22);
+
+    currentY += 30;
   }
 
   // Clinical Accuracy & Setup Disclosure

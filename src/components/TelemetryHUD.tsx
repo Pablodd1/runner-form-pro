@@ -204,7 +204,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ metrics, speedKmh })
         </button>
 
         {showAdvanced && (
-          <div className="p-3 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
+          <div className="p-3 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
             {/* 1. Dynamic Velocity & Pace */}
             <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5">
               <div className="flex items-center justify-between text-slate-400 text-[10px] uppercase font-bold">
@@ -235,7 +235,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ metrics, speedKmh })
               <p className="text-[10px] text-slate-500">Vertical bounce / Stride length</p>
             </div>
 
-            {/* 2. Leg Spring Stiffness */}
+            {/* 3. Leg Spring Stiffness */}
             <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5">
               <div className="flex items-center justify-between text-slate-400 text-[10px] uppercase font-bold">
                 <span>Leg Stiffness (K_leg)</span>
@@ -248,7 +248,7 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ metrics, speedKmh })
               <p className="text-[10px] text-slate-500">Spring-mass tendon elasticity</p>
             </div>
 
-            {/* 3. Peak Ground Reaction Force */}
+            {/* 4. Peak Ground Reaction Force */}
             <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5">
               <div className="flex items-center justify-between text-slate-400 text-[10px] uppercase font-bold">
                 <span>Peak GRF Shock</span>
@@ -261,7 +261,24 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ metrics, speedKmh })
               <p className="text-[10px] text-slate-500">Deceleration impact transient</p>
             </div>
 
-            {/* 4. Power Component Breakdown */}
+            {/* 5. Touchdown Shin Angle (Dr. JP Gloria DPT) */}
+            <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5">
+              <div className="flex items-center justify-between text-slate-400 text-[10px] uppercase font-bold">
+                <span>Touchdown Shin</span>
+                <Footprints className="w-3 h-3 text-cyan-400" />
+              </div>
+              <div className="flex items-baseline gap-1 my-0.5">
+                <span className={`text-xl font-bold font-mono ${(metrics.shinAngleAtTouchdownDeg ?? 6.2) <= 8.5 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {metrics.shinAngleAtTouchdownDeg ?? 6.2}°
+                </span>
+                <span className="text-[10px] text-slate-400">tilt</span>
+              </div>
+              <p className="text-[10px] text-slate-500">
+                {(metrics.shinAngleAtTouchdownDeg ?? 6.2) <= 8.5 ? 'Near-vertical tibia' : 'Outstretched braking'}
+              </p>
+            </div>
+
+            {/* 6. Power Component Breakdown */}
             <div className="bg-slate-950/70 border border-slate-800 rounded-lg p-2.5">
               <div className="flex items-center justify-between text-slate-400 text-[10px] uppercase font-bold">
                 <span>Power Split</span>
@@ -269,15 +286,15 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({ metrics, speedKmh })
               </div>
               <div className="text-[11px] font-mono space-y-0.5 mt-1">
                 <div className="flex justify-between text-slate-300">
-                  <span>Horiz Forward:</span>
+                  <span>Horiz:</span>
                   <span className="font-bold text-cyan-300">{pBreakdown.pHorizWatts}W</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>Vert Bounce:</span>
+                  <span>Bounce:</span>
                   <span className="font-bold text-amber-300">{pBreakdown.pVertWatts}W</span>
                 </div>
                 <div className="flex justify-between text-slate-500">
-                  <span>Limb Accel:</span>
+                  <span>Limb:</span>
                   <span className="font-bold text-slate-300">{pBreakdown.pInternalWatts}W</span>
                 </div>
               </div>

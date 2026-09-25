@@ -17,7 +17,8 @@ import {
   Activity,
   ShieldCheck,
   TrendingUp,
-  Percent
+  Percent,
+  Compass
 } from 'lucide-react';
 
 interface SummaryReportModalProps {
@@ -210,6 +211,15 @@ export const SummaryReportModal: React.FC<SummaryReportModalProps> = ({ summary,
               <Clock className="w-3.5 h-3.5 text-blue-400" />
               Ground Contact
             </div>
+            <div className="text-xl font-bold font-mono text-blue-300">{summary.avgGroundContactTimeMs} <span className="text-xs font-normal text-slate-400">ms</span></div>
+          </div>
+
+          <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
+              <Compass className="w-3.5 h-3.5 text-amber-400" />
+              Touchdown Shin
+            </div>
+            <div className="text-xl font-bold font-mono text-amber-300">{summary.avgShinAngleDeg ?? 6.5}° <span className="text-xs font-normal text-slate-400">tilt</span></div>
           </div>
         </div>
       )}
@@ -255,7 +265,64 @@ export const SummaryReportModal: React.FC<SummaryReportModalProps> = ({ summary,
         </div>
       )}
 
-      {/* AI Identified Discrepancies & Prescribed Drills */}
+      {/* Dr. JP Gloria DPT Clinical Biomechanics Insights */}
+      {!isJump && summary.clinicalDptNotes && (
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950/30 border border-cyan-800/40 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-cyan-400" />
+              <h3 className="font-black text-white text-sm sm:text-base">
+                Dr. JP Gloria, DPT — Clinical Biomechanics Framework
+              </h3>
+            </div>
+            <span className="text-[11px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-800/80 px-2.5 py-0.5 rounded-full">
+              Evidence-Informed Gait Rules
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800/90 space-y-1">
+              <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                <Footprints className="w-3.5 h-3.5" />
+                Touchdown Shin Angle & Braking Force
+              </span>
+              <p className="text-slate-300 text-[11.5px] leading-relaxed">
+                {summary.clinicalDptNotes.shinAngleVerdict}
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800/90 space-y-1">
+              <span className="font-bold text-cyan-300 flex items-center gap-1.5">
+                <TrendingUp className="w-3.5 h-3.5" />
+                Dynamic Cadence Target (+5% to +8% Rule)
+              </span>
+              <p className="text-slate-300 text-[11.5px] leading-relaxed">
+                {summary.clinicalDptNotes.cadencePrescription}
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800/90 space-y-1">
+              <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5" />
+                Tissue Load Vector ({summary.predominantStrike.toUpperCase()} Strike)
+              </span>
+              <p className="text-slate-300 text-[11.5px] leading-relaxed">
+                {summary.clinicalDptNotes.tissueLoadRecommendation}
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800/90 space-y-1">
+              <span className="font-bold text-rose-300 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Tissue Capacity & Soreness Management
+              </span>
+              <p className="text-slate-300 text-[11.5px] leading-relaxed">
+                {summary.clinicalDptNotes.fiveTwentyRuleNotice}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Identified Discrepancies */}
         <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 space-y-3">
