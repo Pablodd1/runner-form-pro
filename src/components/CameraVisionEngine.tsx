@@ -187,6 +187,21 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
     }
   }, [testType]);
 
+  // When 1-minute evaluation starts, ensure imported video plays automatically so live analysis collects data
+  useEffect(() => {
+    if (isEvaluationActive && sourceMode === 'upload' && videoRef.current) {
+      const v = videoRef.current;
+      v.muted = true;
+      v.defaultMuted = true;
+      v.playsInline = true;
+      if (v.paused || v.ended || (v.duration && v.currentTime >= v.duration - 0.2)) {
+        v.currentTime = 0;
+        v.play().catch(() => {});
+        setIsVideoPlaying(true);
+      }
+    }
+  }, [isEvaluationActive, sourceMode]);
+
   // 1. Enumerate available video input devices
   const refreshDevices = useCallback(async () => {
     try {
@@ -506,10 +521,19 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
       setIsAutoSync(false);
       setPlaybackSpeed(0.5); // Default to clinical slow-mo
       if (videoRef.current) {
-        videoRef.current.src = url;
-        videoRef.current.playbackRate = 0.5;
-        videoRef.current.load();
-        videoRef.current.play().catch(() => {});
+        const v = videoRef.current;
+        v.src = url;
+        v.playbackRate = 0.5;
+        v.muted = true;
+        v.defaultMuted = true;
+        v.playsInline = true;
+        v.load();
+        const p = v.play();
+        if (p !== undefined) {
+          p.catch((err) => {
+            console.warn('Auto-play blocked, user click will play:', err);
+          });
+        }
         setIsVideoPlaying(true);
       }
     }
@@ -679,6 +703,11 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
 
         if (sourceMode === 'upload' && video.duration) {
           setVideoProgress((video.currentTime / video.duration) * 100);
+          // Continuous seamless loop so live evaluation never freezes when video reaches the end
+          if (video.currentTime >= video.duration - 0.08 && isVideoPlaying) {
+            video.currentTime = 0;
+            video.play().catch(() => {});
+          }
         }
       } else if (canvas && sourceMode === 'camera') {
         const ctx = canvas.getContext('2d');
@@ -1036,10 +1065,19 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
     setIsAutoSync(false);
     setPlaybackSpeed(0.5); // Default 0.5x biomechanics slow-mo
     if (videoRef.current) {
-      videoRef.current.src = '/sample_runner.mp4';
-      videoRef.current.playbackRate = 0.5;
-      videoRef.current.load();
-      videoRef.current.play().catch(() => {});
+      const v = videoRef.current;
+      v.src = '/sample_runner.mp4';
+      v.playbackRate = 0.5;
+      v.muted = true;
+      v.defaultMuted = true;
+      v.playsInline = true;
+      v.load();
+      const p = v.play();
+      if (p !== undefined) {
+        p.catch((err) => {
+          console.warn('Auto-play blocked, user click will play:', err);
+        });
+      }
       setIsVideoPlaying(true);
     }
   };
@@ -1103,14 +1141,21 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
     <div className="flex flex-col gap-3">
       {/* Video & Canvas Viewport */}
       <div className="relative w-full aspect-video max-h-[560px] bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center">
-        {/* Real hidden video element receiving WebRTC camera stream */}
+        {/* Active video element for WebRTC camera or imported video file (opacity-0 keeps GPU decoding active on iOS/Android) */}
         <video
           ref={videoRef}
           playsInline
           muted
           loop
-          className="hidden"
-          onEnded={() => setIsVideoPlaying(false)}
+          autoPlay
+          className="absolute top-0 left-0 w-px h-px opacity-0 pointer-events-none -z-50"
+          onEnded={() => {
+            if (videoRef.current) {
+              videoRef.current.currentTime = 0;
+              videoRef.current.play().catch(() => {});
+              setIsVideoPlaying(true);
+            }
+          }}
           onLoadedMetadata={() => {
             if (videoRef.current) {
               videoRef.current.playbackRate = isAutoSync ? 0.5 : playbackSpeed;
@@ -1118,6 +1163,8 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
                 current: formatVideoTime(videoRef.current.currentTime),
                 duration: formatVideoTime(videoRef.current.duration),
               });
+              videoRef.current.play().catch(() => {});
+              setIsVideoPlaying(true);
             }
           }}
           onTimeUpdate={() => {
@@ -1164,80 +1211,89 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
           </div>
         )}
 
-        {/* Status Badges Overlay (Top Left) */}
-        <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2 pointer-events-none">
-          <span className="px-2.5 py-1 rounded-md text-[11px] font-bold tracking-wide bg-slate-900/90 text-cyan-400 border border-cyan-800/80 backdrop-blur-md flex items-center gap-1.5 shadow-md">
-            {isDetecting ? (
-              <CircleDot className="w-3 h-3 text-emerald-400 animate-ping" />
-            ) : (
-              <CircleDot className="w-3 h-3 text-cyan-400" />
+        {/* Status Badges Overlay (Top Bar - Sleek & Non-Intrusive) */}
+        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5 pointer-events-none z-10">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold tracking-wide bg-slate-900/90 text-cyan-400 border border-cyan-800/80 backdrop-blur-md flex items-center gap-1 shadow-md">
+              {isDetecting ? (
+                <CircleDot className="w-2.5 h-2.5 text-emerald-400 animate-ping" />
+              ) : (
+                <CircleDot className="w-2.5 h-2.5 text-cyan-400" />
+              )}
+              33-JOINT BLUE KINEMATICS
+            </span>
+
+            <span className="px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-mono bg-slate-950/80 text-slate-300 border border-slate-800">
+              {fps} FPS
+            </span>
+
+            <span className="px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-mono bg-slate-950/80 text-cyan-300 border border-cyan-900 flex items-center gap-1">
+              <Cpu className="w-2.5 h-2.5 text-cyan-400" />
+              {inferenceLatencyMs}ms
+            </span>
+
+            <span className="pointer-events-auto">
+              {renderModelStatusBadge()}
+            </span>
+
+            {testType === 'vertical_jump' && (
+              <span className="px-2.5 py-0.5 rounded text-[10px] sm:text-[11px] font-bold bg-amber-950/90 text-amber-300 border border-amber-800 flex items-center gap-1">
+                <Zap className="w-2.5 h-2.5 text-amber-400" />
+                JUMP POWER
+              </span>
             )}
-            33-JOINT BLUE KINEMATICS
-          </span>
 
-          <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-950/80 text-slate-300 border border-slate-800">
-            {fps} FPS
-          </span>
+            {testType === 'runner_form' && isDetecting && (
+              <span className={`px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-bold border flex items-center gap-1 shadow-md ${
+                livePaceCategory === 'sprint'
+                  ? 'bg-rose-950/90 text-rose-300 border-rose-700 animate-pulse'
+                  : 'bg-cyan-950/90 text-cyan-300 border-cyan-700'
+              }`}>
+                <Zap className="w-2.5 h-2.5 text-cyan-400" />
+                {liveDynamicSpeed} km/h • {livePaceCategory.toUpperCase().replace('_', ' ')}
+              </span>
+            )}
 
-          <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-950/80 text-cyan-300 border border-cyan-900 flex items-center gap-1">
-            <Cpu className="w-3 h-3 text-cyan-400" />
-            {inferenceLatencyMs}ms
-          </span>
+            {sourceMode === 'camera' && !cameraError && (
+              <span className="px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold bg-emerald-950/90 text-emerald-300 border border-emerald-800 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                LIVE
+              </span>
+            )}
+          </div>
 
-          <span className="pointer-events-auto">
-            {renderModelStatusBadge()}
-          </span>
+          <div className="flex items-center gap-1.5 pointer-events-auto">
+            {sourceMode === 'camera' && (
+              <button
+                onClick={() => setShowPositioningGuide(true)}
+                className="p-1.5 rounded-lg bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-cyan-400 hover:border-cyan-600 transition flex items-center gap-1 text-[10px] font-semibold backdrop-blur-md shadow cursor-pointer"
+                title="Camera & Patient Positioning Guide"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">Guide</span>
+              </button>
+            )}
 
-          {testType === 'vertical_jump' && (
-            <span className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-amber-950/90 text-amber-300 border border-amber-800 flex items-center gap-1">
-              <Zap className="w-3 h-3 text-amber-400" />
-              VERTICAL JUMP POWER
-            </span>
-          )}
-
-          {testType === 'runner_form' && isDetecting && (
-            <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border flex items-center gap-1 shadow-md ${
-              livePaceCategory === 'sprint'
-                ? 'bg-rose-950/90 text-rose-300 border-rose-700 animate-pulse'
-                : livePaceCategory === 'fast_run'
-                ? 'bg-purple-950/90 text-purple-300 border-purple-700'
-                : livePaceCategory === 'tempo'
-                ? 'bg-cyan-950/90 text-cyan-300 border-cyan-700'
-                : livePaceCategory === 'aerobic_jog'
-                ? 'bg-emerald-950/90 text-emerald-300 border-emerald-700'
-                : 'bg-amber-950/90 text-amber-300 border-amber-700'
-            }`}>
-              <Zap className="w-3 h-3 text-cyan-400" />
-              {liveDynamicSpeed} km/h • {livePaceCategory.toUpperCase().replace('_', ' ')}
-            </span>
-          )}
-
-          {sourceMode === 'camera' && !cameraError && (
-            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/90 text-emerald-300 border border-emerald-800 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              LIVE CAMERA FEED
-            </span>
-          )}
-
-          {isRecording ? (
-            <button
-              onClick={toggleRecording}
-              className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-red-950 text-red-300 border border-red-800 animate-pulse flex items-center gap-1.5 pointer-events-auto cursor-pointer shadow-lg hover:bg-red-900 transition"
-              title="Click to Stop & Save Analyzed Video"
-            >
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-              REC 00:{recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds} • FINISH & DOWNLOAD
-            </button>
-          ) : (
-            <button
-              onClick={toggleRecording}
-              className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-900/90 text-cyan-300 hover:text-white hover:bg-cyan-950/80 border border-slate-700 hover:border-cyan-600 flex items-center gap-1.5 pointer-events-auto cursor-pointer shadow-md transition"
-              title="Record video with 33-joint skeleton and save to disk"
-            >
-              <Video className="w-3 h-3 text-cyan-400" />
-              Record Video
-            </button>
-          )}
+            {isRecording ? (
+              <button
+                onClick={toggleRecording}
+                className="px-2 py-1 rounded-md text-[10px] font-bold bg-red-950 text-red-300 border border-red-800 animate-pulse flex items-center gap-1 pointer-events-auto cursor-pointer shadow-lg hover:bg-red-900 transition"
+                title="Click to Stop & Save Analyzed Video"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                REC 00:{recordingSeconds < 10 ? `0${recordingSeconds}` : recordingSeconds}
+              </button>
+            ) : (
+              <button
+                onClick={toggleRecording}
+                className="px-2 py-1 rounded-md text-[10px] font-bold bg-slate-900/90 text-cyan-300 hover:text-white hover:bg-cyan-950/80 border border-slate-700 hover:border-cyan-600 flex items-center gap-1 pointer-events-auto cursor-pointer shadow-md transition"
+                title="Record video with 33-joint skeleton and save to disk"
+              >
+                <Video className="w-3 h-3 text-cyan-400" />
+                <span className="hidden sm:inline">Record</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Live Framing Diagnostic Alert Pill (Top Center) */}
@@ -1257,161 +1313,158 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
             </div>
           </div>
         )}
+      </div>
 
-        {/* Positioning Guide Re-open Button (Top Right) */}
-        {sourceMode === 'camera' && (
-          <button
-            onClick={() => setShowPositioningGuide(true)}
-            className="absolute top-3 right-3 p-2 rounded-xl bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-cyan-400 hover:border-cyan-600 transition z-20 flex items-center gap-1.5 text-xs font-semibold backdrop-blur-md shadow"
-            title="Camera & Patient Positioning Guide"
-          >
-            <HelpCircle className="w-4 h-4 text-cyan-400" />
-            Positioning Guide
-          </button>
-        )}
+      {/* Video Scrubber & Biomechanics Playback Controls (Dedicated Console Bar Directly BELOW Canvas - ZERO Overlap on Runner) */}
+      {sourceMode === 'upload' && videoRef.current && (
+        <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-3 shadow-xl flex flex-col gap-2.5">
+          {/* Top row: Scrubber and Timecodes */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-mono text-cyan-400 font-bold min-w-[55px]">
+              {videoTimeDisplay.current}
+            </span>
 
-        {/* Video Scrubber & Biomechanics Playback Controls */}
-        {sourceMode === 'upload' && videoRef.current && (
-          <div className="absolute bottom-3 left-3 right-3 bg-slate-900/95 backdrop-blur-md p-2.5 rounded-xl border border-slate-700/80 flex flex-col gap-2 shadow-2xl z-10">
-            {/* Top row: Scrubber and Timecodes */}
-            <div className="flex items-center gap-2.5">
-              <span className="text-[10px] font-mono text-cyan-400 font-semibold min-w-[50px]">
-                {videoTimeDisplay.current}
-              </span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="0.1"
+              value={videoProgress}
+              onChange={(e) => {
+                const targetPercent = Number(e.target.value);
+                if (videoRef.current && videoRef.current.duration) {
+                  const newTime = (targetPercent / 100) * videoRef.current.duration;
+                  videoRef.current.currentTime = newTime;
+                  setVideoProgress(targetPercent);
+                  setVideoTimeDisplay({
+                    current: formatVideoTime(newTime),
+                    duration: formatVideoTime(videoRef.current.duration),
+                  });
+                }
+              }}
+              className="flex-1 accent-cyan-400 h-2 rounded-lg bg-slate-800 cursor-pointer"
+            />
 
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="0.1"
-                value={videoProgress}
-                onChange={(e) => {
-                  const targetPercent = Number(e.target.value);
-                  if (videoRef.current && videoRef.current.duration) {
-                    const newTime = (targetPercent / 100) * videoRef.current.duration;
-                    videoRef.current.currentTime = newTime;
-                    setVideoProgress(targetPercent);
-                    setVideoTimeDisplay({
-                      current: formatVideoTime(newTime),
-                      duration: formatVideoTime(videoRef.current.duration),
-                    });
+            <span className="text-xs font-mono text-slate-400 min-w-[55px] text-right">
+              {videoTimeDisplay.duration}
+            </span>
+          </div>
+
+          {/* Bottom row: Play/Pause, Frame Stepping, Speed Presets, Auto-Sync & Health */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 border-t border-slate-800/80">
+            <div className="flex items-center gap-2">
+              {/* Play/Pause Button */}
+              <button
+                onClick={() => {
+                  if (videoRef.current) {
+                    if (isVideoPlaying) {
+                      videoRef.current.pause();
+                      setIsVideoPlaying(false);
+                    } else {
+                      videoRef.current.play().catch(() => {});
+                      setIsVideoPlaying(true);
+                    }
                   }
                 }}
-                className="flex-1 accent-cyan-400 h-1.5 rounded-lg bg-slate-800 cursor-pointer"
-              />
+                className="px-3.5 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition shadow-md flex items-center gap-1.5 cursor-pointer text-xs"
+                title={isVideoPlaying ? 'Pause Video' : 'Play Video'}
+              >
+                {isVideoPlaying ? (
+                  <>
+                    <Pause className="w-3.5 h-3.5 fill-slate-950" />
+                    <span>Pause</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-slate-950" />
+                    <span>Play Live</span>
+                  </>
+                )}
+              </button>
 
-              <span className="text-[10px] font-mono text-slate-400 min-w-[50px] text-right">
-                {videoTimeDisplay.duration}
-              </span>
+              {/* Step Back 1 Frame */}
+              <button
+                onClick={() => handleStepFrame(-1)}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
+                title="Step Backward 1 Frame (-33ms)"
+              >
+                <SkipBack className="w-4 h-4" />
+              </button>
+
+              {/* Step Forward 1 Frame */}
+              <button
+                onClick={() => handleStepFrame(1)}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
+                title="Step Forward 1 Frame (+33ms)"
+              >
+                <SkipForward className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* Bottom row: Play/Pause, Step -1, Step +1, Speed presets, Auto-Sync, and Sync Quality Badge */}
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-1.5">
-                {/* Play/Pause */}
+            {/* Speed Presets & Auto-Sync */}
+            <div className="flex items-center gap-1 overflow-x-auto max-w-full py-0.5 bg-slate-950 p-1 rounded-xl border border-slate-800 font-mono text-xs">
+              {[
+                { label: '0.25x', speed: 0.25, title: 'Quarter Speed (Super Slow-Mo)' },
+                { label: '0.5x (Gait)', speed: 0.5, title: 'Clinical Slow-Motion (Recommended)' },
+                { label: '0.75x', speed: 0.75, title: 'Smooth 3/4 Speed' },
+                { label: '1.0x', speed: 1.0, title: 'Real-Time Speed' },
+              ].map((item) => (
                 <button
-                  onClick={() => {
-                    if (videoRef.current) {
-                      if (isVideoPlaying) {
-                        videoRef.current.pause();
-                        setIsVideoPlaying(false);
-                      } else {
-                        videoRef.current.play().catch(() => {});
-                        setIsVideoPlaying(true);
-                      }
-                    }
-                  }}
-                  className="p-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition shadow cursor-pointer"
-                  title={isVideoPlaying ? 'Pause Video' : 'Play Video'}
+                  key={item.speed}
+                  onClick={() => handleSpeedChange(item.speed)}
+                  title={item.title}
+                  className={`px-2 py-1 rounded-lg transition whitespace-nowrap cursor-pointer ${
+                    !isAutoSync && playbackSpeed === item.speed
+                      ? 'bg-cyan-500 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  {isVideoPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-slate-950" />}
+                  {item.label}
                 </button>
+              ))}
 
-                {/* Step Back 1 Frame */}
-                <button
-                  onClick={() => handleStepFrame(-1)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
-                  title="Step Backward 1 Frame (-33ms)"
-                >
-                  <SkipBack className="w-3.5 h-3.5" />
-                </button>
+              <button
+                onClick={handleToggleAutoSync}
+                title="Auto-Sync: Dynamically paces video playback to AI inference latency"
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition whitespace-nowrap cursor-pointer ${
+                  isAutoSync
+                    ? 'bg-emerald-500 text-slate-950 font-bold shadow'
+                    : 'text-slate-400 hover:text-emerald-300'
+                }`}
+              >
+                <Zap className="w-3 h-3 text-current" />
+                Auto-Sync {isAutoSync ? `(${playbackSpeed}x)` : ''}
+              </button>
+            </div>
 
-                {/* Step Forward 1 Frame */}
-                <button
-                  onClick={() => handleStepFrame(1)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition cursor-pointer"
-                  title="Step Forward 1 Frame (+33ms)"
-                >
-                  <SkipForward className="w-3.5 h-3.5" />
-                </button>
-
-                {/* Speed Presets */}
-                <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800 font-mono text-[11px] ml-1">
-                  {[
-                    { label: '0.25x', speed: 0.25, title: 'Quarter Speed — High-precision foot-strike examination' },
-                    { label: '0.5x (Gait)', speed: 0.5, title: 'Clinical Slow-Motion (Recommended) — Zero lag, captures full range of motion' },
-                    { label: '0.75x', speed: 0.75, title: 'Smooth Slow-Mo' },
-                    { label: '1.0x', speed: 1.0, title: 'Real-Time Playback Speed' },
-                  ].map((item) => (
-                    <button
-                      key={item.speed}
-                      onClick={() => handleSpeedChange(item.speed)}
-                      title={item.title}
-                      className={`px-2 py-1 rounded transition cursor-pointer ${
-                        !isAutoSync && playbackSpeed === item.speed
-                          ? 'bg-cyan-500 text-slate-950 font-bold shadow'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-
-                  {/* Auto-Sync Button */}
-                  <button
-                    onClick={handleToggleAutoSync}
-                    title="Auto-Sync: Dynamically paces video playback to the AI inference latency so 100% of frames are captured with zero tracking delay"
-                    className={`flex items-center gap-1 px-2 py-1 rounded transition cursor-pointer ${
-                      isAutoSync
-                        ? 'bg-emerald-500 text-slate-950 font-bold shadow'
-                        : 'text-slate-400 hover:text-emerald-300'
-                    }`}
-                  >
-                    <Zap className="w-3 h-3 text-current" />
-                    Auto-Sync {isAutoSync ? `(${playbackSpeed}x)` : ''}
-                  </button>
-                </div>
-              </div>
-
-              {/* Sync Health Status */}
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold">
-                {inferenceLatencyMs <= 25 || playbackSpeed <= 0.5 ? (
-                  <span className="text-emerald-400 flex items-center gap-1 bg-emerald-950/70 border border-emerald-800/80 px-2 py-0.5 rounded-md">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Tracking Synchronized ({inferenceLatencyMs}ms)
-                  </span>
-                ) : (
-                  <span className="text-amber-400 flex items-center gap-1 bg-amber-950/70 border border-amber-800/80 px-2 py-0.5 rounded-md">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                    Set 0.5x for zero-lag precision
-                  </span>
-                )}
-              </div>
+            {/* Sync Health Status */}
+            <div className="flex items-center gap-1.5 text-xs font-semibold">
+              {inferenceLatencyMs <= 25 || playbackSpeed <= 0.5 ? (
+                <span className="text-emerald-400 flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-800/80 px-2.5 py-1 rounded-lg">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Live Sync ({inferenceLatencyMs}ms)
+                </span>
+              ) : (
+                <span className="text-amber-400 flex items-center gap-1.5 bg-amber-950/80 border border-amber-800/80 px-2.5 py-1 rounded-lg">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  Select 0.5x for zero lag
+                </span>
+              )}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Camera & Hardware Performance Controls Toolbar */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
         {/* Source Mode Toggle */}
-        <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full sm:w-auto bg-slate-950 p-1.5 rounded-xl border border-slate-800">
           <button
             onClick={() => {
               setSourceMode('camera');
               setCameraError('');
             }}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-md font-semibold transition ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer text-xs ${
               sourceMode === 'camera'
                 ? 'bg-cyan-500 text-slate-950 shadow'
                 : 'text-slate-400 hover:text-white'
@@ -1422,7 +1475,7 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
           </button>
 
           <label
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-md font-semibold cursor-pointer transition ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold cursor-pointer transition text-xs ${
               sourceMode === 'upload' && !videoRef.current?.src?.includes('sample_runner.mp4')
                 ? 'bg-cyan-500 text-slate-950 shadow'
                 : 'text-slate-400 hover:text-white'
@@ -1440,7 +1493,7 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
 
           <button
             onClick={handleLoadSampleVideo}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-md font-semibold transition ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer text-xs ${
               sourceMode === 'upload' && videoRef.current?.src?.includes('sample_runner.mp4')
                 ? 'bg-cyan-500 text-slate-950 shadow'
                 : 'text-slate-400 hover:text-white'
@@ -1453,7 +1506,7 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
 
           <button
             onClick={() => setSourceMode('demo')}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-md font-semibold transition ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold transition cursor-pointer text-xs ${
               sourceMode === 'demo'
                 ? 'bg-cyan-500 text-slate-950 shadow'
                 : 'text-slate-400 hover:text-white'
