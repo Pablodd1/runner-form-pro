@@ -5,6 +5,7 @@ import type {
   PatientProfile,
   AssessmentTestType,
   VerticalJumpMetrics,
+  GaitKeyframeCapture,
 } from '../types/runner';
 
 /**
@@ -145,8 +146,20 @@ export function generateEvaluationReport(
   allAlerts: DiscrepancyAlert[],
   snapshotDataUrl?: string,
   testType: AssessmentTestType = 'runner_form',
-  jumpMetricsHistory: VerticalJumpMetrics[] = []
+  jumpMetricsHistory: VerticalJumpMetrics[] = [],
+  keyframes: GaitKeyframeCapture[] = []
 ): EvaluationSummary {
+  // Filter alerts by camera plane to eliminate monocular perspective distortion
+  const viewPlane = profile.cameraView || 'sagittal';
+  const filteredAlerts = allAlerts.filter((a) => {
+    if (viewPlane === 'sagittal' && (a.type === 'knee_valgus' || a.type === 'pelvic_drop')) {
+      return false; // Suppress frontal plane alerts during side view
+    }
+    if (viewPlane === 'frontal' && (a.type === 'overstride' || a.type === 'shin_angle' || a.type === 'excessive_lean')) {
+      return false; // Suppress sagittal plane alerts during front view
+    }
+    return true;
+  });
   // If Vertical Jump test completed
   if (testType === 'vertical_jump' && jumpMetricsHistory.length > 0) {
     const validJumps = jumpMetricsHistory.filter((j) => j.jumpHeightCm > 5);
@@ -331,9 +344,10 @@ export function generateEvaluationReport(
     peakSpeedKmh,
     minSpeedKmh,
     speedPaceBreakdown,
-    alertsDetected: allAlerts,
+    alertsDetected: filteredAlerts,
     prescribedDrills: getRecommendedDrills(),
     snapshotDataUrl,
+    gaitKeyframes: keyframes,
   };
 }
 

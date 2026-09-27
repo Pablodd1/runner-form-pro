@@ -6,6 +6,8 @@ export type FootStrikeType = 'heel' | 'midfoot' | 'forefoot';
 
 export type RunningSpeedProtocol = 'variable_intervals' | 'steady_tempo' | 'sprint_ramp';
 
+export type CameraViewPlane = 'sagittal' | 'frontal';
+
 export interface PatientProfile {
   name: string;
   phone: string;
@@ -13,6 +15,7 @@ export interface PatientProfile {
   weightKg: number;
   cameraDistanceM: number;
   mode: EvaluationMode;
+  cameraView?: CameraViewPlane;
   targetSpeedKmh: number;
   runningProtocol?: RunningSpeedProtocol;
   notes?: string;
@@ -154,4 +157,24 @@ export interface EvaluationSummary {
     frequency: string;
   }[];
   snapshotDataUrl?: string;
+  gaitKeyframes?: GaitKeyframeCapture[];
+}
+
+export interface GaitKeyframeCapture {
+  phase: 'initial_contact' | 'mid_stance' | 'toe_off';
+  title: string;
+  timestampMs: number;
+  dataUrl: string;
+  keyMetrics: {
+    label: string;
+    value: string;
+  }[];
+  clinicalNote: string;
+}
+
+export interface StoredSessionRecord {
+  id: string;
+  savedAt: number;
+  profileName: string;
+  summary: EvaluationSummary;
 }

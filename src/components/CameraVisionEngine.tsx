@@ -3,7 +3,9 @@ import type {
   Landmark3D,
   BiomechanicsFrameMetrics,
   VerticalJumpMetrics,
-  AssessmentTestType
+  AssessmentTestType,
+  CameraViewPlane,
+  GaitKeyframeCapture
 } from '../types/runner';
 import {
   POSE_CONNECTIONS,
@@ -17,6 +19,7 @@ import { generateSimulatedRunnerLandmarks, generateSimulatedJumpLandmarks } from
 import { loadMediaPipeScripts, getPoseLocateFile } from '../utils/mediapipeLoader';
 import { JumpBiomechanicsTracker } from '../utils/jumpBiomechanics';
 import { RunningGaitKinematicsTracker } from '../utils/runningKinematicsTracker';
+import { GaitPhaseDetector } from '../utils/gaitPhaseDetector';
 import { PatientPositioningGuide } from './PatientPositioningGuide';
 import {
   Camera,
@@ -46,11 +49,14 @@ interface CameraVisionEngineProps {
   onFrameProcessed: (metrics: BiomechanicsFrameMetrics, landmarks: Landmark3D[]) => void;
   onJumpProcessed?: (metrics: VerticalJumpMetrics) => void;
   testType?: AssessmentTestType;
+  cameraView?: CameraViewPlane;
+  onCameraViewChange?: (view: CameraViewPlane) => void;
   runnerHeightCm: number;
   runnerWeightKg: number;
   speedKmh: number;
   isEvaluationActive: boolean;
   onSnapshotReady?: (dataUrl: string) => void;
+  onKeyframesReady?: (keyframes: GaitKeyframeCapture[]) => void;
 }
 
 // Pose model loading states
@@ -60,11 +66,14 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
   onFrameProcessed,
   onJumpProcessed,
   testType = 'runner_form',
+  cameraView = 'sagittal',
+  onCameraViewChange,
   runnerHeightCm,
   runnerWeightKg,
   speedKmh,
   isEvaluationActive,
   onSnapshotReady,
+  onKeyframesReady,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -126,6 +135,7 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
 
   // Dynamic Running Gait Tracker (real-time cadence, adaptive speed, GCT, vertical oscillation)
   const gaitTrackerRef = useRef<RunningGaitKinematicsTracker>(new RunningGaitKinematicsTracker());
+  const gaitPhaseDetectorRef = useRef<GaitPhaseDetector>(new GaitPhaseDetector());
   const [livePaceCategory, setLivePaceCategory] = useState<string>('tempo');
   const [liveDynamicSpeed, setLiveDynamicSpeed] = useState<number>(10.0);
 
@@ -153,11 +163,13 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
     onFrameProcessed,
     onJumpProcessed,
     testType,
+    cameraView,
     runnerHeightCm,
     runnerWeightKg,
     speedKmh,
     isEvaluationActive,
     onSnapshotReady,
+    onKeyframesReady,
     showAngleArcs,
     showStanceVector,
     activeModelComplexity,
@@ -168,16 +180,36 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
       onFrameProcessed,
       onJumpProcessed,
       testType,
+      cameraView,
       runnerHeightCm,
       runnerWeightKg,
       speedKmh,
       isEvaluationActive,
       onSnapshotReady,
+      onKeyframesReady,
       showAngleArcs,
       showStanceVector,
       activeModelComplexity,
     };
   });
+
+  // Keyframe Latching: Trigger capture when 60s evaluation completes
+  const wasEvaluatingRef = useRef(false);
+  useEffect(() => {
+    if (wasEvaluatingRef.current && !isEvaluationActive) {
+      if (propsRef.current.onKeyframesReady) {
+        const kfs = gaitPhaseDetectorRef.current.generateKeyframeCaptures(
+          canvasRef.current,
+          propsRef.current.cameraView || 'sagittal'
+        );
+        propsRef.current.onKeyframesReady(kfs);
+      }
+    }
+    if (!wasEvaluatingRef.current && isEvaluationActive) {
+      gaitPhaseDetectorRef.current.reset();
+    }
+    wasEvaluatingRef.current = isEvaluationActive;
+  }, [isEvaluationActive]);
 
   // Reset jump tracker if testType switches
   useEffect(() => {
@@ -400,8 +432,17 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
 
     props.onFrameProcessed(metrics, landmarks);
 
-    if (props.isEvaluationActive && props.onSnapshotReady && canvasRef.current) {
-      props.onSnapshotReady(canvasRef.current.toDataURL('image/jpeg', 0.85));
+    if (props.isEvaluationActive) {
+      gaitPhaseDetectorRef.current.processFrame(
+        landmarks,
+        angles,
+        dynamicGait.overstrideDistanceCm,
+        dynamicGait.shinAngleAtTouchdownDeg
+      );
+
+      if (props.onSnapshotReady && canvasRef.current) {
+        props.onSnapshotReady(canvasRef.current.toDataURL('image/jpeg', 0.85));
+      }
     }
   };
 
@@ -1517,6 +1558,36 @@ export const CameraVisionEngine: React.FC<CameraVisionEngineProps> = ({
             Virtual Demo
           </button>
         </div>
+
+        {/* Camera View Plane Selector (Sagittal vs Frontal) */}
+        {testType === 'runner_form' && (
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-400 font-bold uppercase px-1.5">View Plane:</span>
+            <button
+              onClick={() => onCameraViewChange?.('sagittal')}
+              className={`px-2.5 py-1.5 rounded-lg font-bold transition text-xs cursor-pointer ${
+                cameraView === 'sagittal'
+                  ? 'bg-cyan-500 text-slate-950 shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Sagittal View: Side angle optimal for overstride, knee flexion, shin angle, and trunk lean"
+            >
+              Sagittal (Side)
+            </button>
+
+            <button
+              onClick={() => onCameraViewChange?.('frontal')}
+              className={`px-2.5 py-1.5 rounded-lg font-bold transition text-xs cursor-pointer ${
+                cameraView === 'frontal'
+                  ? 'bg-cyan-500 text-slate-950 shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Frontal View: Front/Back angle optimal for dynamic knee valgus, pelvic drop, and arm crossover"
+            >
+              Frontal (Front/Back)
+            </button>
+          </div>
+        )}
 
         {/* Download Sample Video Button */}
         <button

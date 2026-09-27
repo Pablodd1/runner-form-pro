@@ -7,6 +7,7 @@ import type {
   EvaluationSummary,
   Landmark3D,
   AssessmentTestType,
+  GaitKeyframeCapture,
 } from './types/runner';
 import { Navbar } from './components/Navbar';
 import { IntakeModal } from './components/IntakeModal';
@@ -17,8 +18,10 @@ import { AIDiscrepancyFeed } from './components/AIDiscrepancyFeed';
 import { SymmetryRadar } from './components/SymmetryRadar';
 import { EvaluationCountdown } from './components/EvaluationCountdown';
 import { SummaryReportModal } from './components/SummaryReportModal';
+import { AudioBiofeedbackBar } from './components/AudioBiofeedbackBar';
+import { SessionHistoryModal } from './components/SessionHistoryModal';
 import { evaluateRealTimeAlerts, generateEvaluationReport } from './utils/aiAdvisor';
-import { Activity, SlidersHorizontal, Zap, Footprints } from 'lucide-react';
+import { Activity, SlidersHorizontal, Zap, Footprints, History } from 'lucide-react';
 
 const DEFAULT_PROFILE: PatientProfile = {
   name: 'Marcus Vance',
@@ -27,6 +30,7 @@ const DEFAULT_PROFILE: PatientProfile = {
   weightKg: 72,
   cameraDistanceM: 2.5,
   mode: 'treadmill',
+  cameraView: 'sagittal',
   targetSpeedKmh: 11.0,
   runningProtocol: 'variable_intervals',
   notes: 'Baseline running form evaluation: bilateral knee flexion, mechanical power, and vertical jump profiling.',
@@ -37,6 +41,8 @@ export const App: React.FC = () => {
   const [currentTestType, setCurrentTestType] = useState<AssessmentTestType>('runner_form');
   const [unitSystem, setUnitSystem] = useState<'metric' | 'imperial'>('metric');
   const [profile, setProfile] = useState<PatientProfile>(DEFAULT_PROFILE);
+  const [showGlobalHistory, setShowGlobalHistory] = useState<boolean>(false);
+  const keyframesRef = useRef<GaitKeyframeCapture[]>([]);
 
   // Live telemetry state
   const [currentMetrics, setCurrentMetrics] = useState<BiomechanicsFrameMetrics | null>(null);
@@ -101,6 +107,7 @@ export const App: React.FC = () => {
     frameHistoryRef.current = [];
     jumpHistoryRef.current = [];
     allAlertsRef.current = [];
+    keyframesRef.current = [];
     setAlerts([]);
     setIsEvaluationActive(true);
   };
@@ -118,7 +125,8 @@ export const App: React.FC = () => {
       allAlertsRef.current,
       snapshotRef.current,
       currentTestType,
-      jumpHistoryRef.current
+      jumpHistoryRef.current,
+      keyframesRef.current
     );
     setSummary(finalReport);
     setCurrentStep('summary');
@@ -216,8 +224,16 @@ export const App: React.FC = () => {
                 </div>
 
                 <button
+                  onClick={() => setShowGlobalHistory(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold border border-slate-700 cursor-pointer transition text-xs"
+                >
+                  <History className="w-3.5 h-3.5 text-cyan-400" />
+                  History & Compare
+                </button>
+
+                <button
                   onClick={() => setCurrentStep('intake')}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold border border-slate-700"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold border border-slate-700 cursor-pointer transition text-xs"
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
                   Edit Patient
@@ -263,6 +279,8 @@ export const App: React.FC = () => {
                 <div className="lg:col-span-8 flex flex-col gap-4">
                   <CameraVisionEngine
                     testType="runner_form"
+                    cameraView={profile.cameraView || 'sagittal'}
+                    onCameraViewChange={(view) => setProfile((p) => ({ ...p, cameraView: view }))}
                     onFrameProcessed={handleFrameProcessed}
                     runnerHeightCm={profile.heightCm}
                     runnerWeightKg={profile.weightKg}
@@ -271,6 +289,14 @@ export const App: React.FC = () => {
                     onSnapshotReady={(dataUrl) => {
                       snapshotRef.current = dataUrl;
                     }}
+                    onKeyframesReady={(kfs) => {
+                      keyframesRef.current = kfs;
+                    }}
+                  />
+
+                  {/* Real-time Auditory Metronome & Biofeedback Bar */}
+                  <AudioBiofeedbackBar
+                    targetCadenceSpm={currentMetrics?.cadenceSpm ? Math.round(currentMetrics.cadenceSpm * 1.06) : 172}
                   />
 
                   {/* Real-time Telemetry HUD */}
@@ -324,6 +350,16 @@ export const App: React.FC = () => {
           </div>
         )}
       </main>
+
+      {/* Global Session History & Longitudinal Comparison Modal */}
+      <SessionHistoryModal
+        isOpen={showGlobalHistory}
+        onClose={() => setShowGlobalHistory(false)}
+        onLoadSession={(session) => {
+          setSummary(session.summary);
+          setCurrentStep('summary');
+        }}
+      />
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950 py-4 px-6 text-center text-xs text-slate-500 flex flex-wrap items-center justify-between gap-2 max-w-7xl w-full mx-auto">

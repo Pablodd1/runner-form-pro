@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { EvaluationSummary } from '../types/runner';
 import { exportEvaluationPDF } from '../utils/pdfGenerator';
+import { saveEvaluationSession } from '../utils/sessionStorage';
+import { SessionHistoryModal } from './SessionHistoryModal';
 import {
   FileDown,
   RefreshCw,
@@ -18,7 +20,9 @@ import {
   ShieldCheck,
   TrendingUp,
   Percent,
-  Compass
+  Compass,
+  Camera,
+  History
 } from 'lucide-react';
 
 interface SummaryReportModalProps {
@@ -27,9 +31,14 @@ interface SummaryReportModalProps {
 }
 
 export const SummaryReportModal: React.FC<SummaryReportModalProps> = ({ summary, onReset }) => {
+  const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
   const isJump = summary.testType === 'vertical_jump';
   const isElite = summary.overallFormScore >= 90;
   const isGood = summary.overallFormScore >= 78;
+
+  useEffect(() => {
+    saveEvaluationSession(summary);
+  }, [summary]);
 
   return (
     <div className="w-full max-w-5xl mx-auto bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 relative overflow-hidden">
@@ -54,15 +63,23 @@ export const SummaryReportModal: React.FC<SummaryReportModalProps> = ({ summary,
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button
             onClick={() => exportEvaluationPDF(summary)}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-sm shadow-xl shadow-cyan-500/25 transition active:scale-95"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-sm shadow-xl shadow-cyan-500/25 transition active:scale-95 cursor-pointer"
           >
             <FileDown className="w-4 h-4" />
             Print / Save Clinical PDF
           </button>
 
           <button
+            onClick={() => setShowHistoryModal(true)}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-sm font-bold transition cursor-pointer"
+          >
+            <History className="w-4 h-4 text-cyan-400" />
+            History & Compare
+          </button>
+
+          <button
             onClick={onReset}
-            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-sm font-bold transition"
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-sm font-bold transition cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" />
             New Test
@@ -323,6 +340,50 @@ export const SummaryReportModal: React.FC<SummaryReportModalProps> = ({ summary,
           </div>
         </div>
       )}
+
+      {/* Gait Phase Keyframe Capture (Initial Contact • Mid-Stance • Toe-Off) */}
+      {!isJump && summary.gaitKeyframes && summary.gaitKeyframes.length > 0 && (
+        <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Camera className="w-5 h-5 text-cyan-400" />
+              <h3 className="font-black text-white text-sm sm:text-base">
+                Gait Phase Keyframe Latching (Clinical Event Freeze-Frames)
+              </h3>
+            </div>
+            <span className="text-[11px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-800/80 px-2.5 py-0.5 rounded-full">
+              Phase-Locked Diagnostics
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {summary.gaitKeyframes.map((kf, idx) => (
+              <div key={idx} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+                <div className="relative aspect-video bg-black overflow-hidden">
+                  <img src={kf.dataUrl} alt={kf.title} className="w-full h-full object-cover" />
+                  <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-950/90 text-cyan-300 border border-cyan-800">
+                    {kf.title}
+                  </div>
+                </div>
+                <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
+                  <div className="space-y-1">
+                    {kf.keyMetrics.map((km, i) => (
+                      <div key={i} className="flex justify-between text-xs">
+                        <span className="text-slate-400">{km.label}:</span>
+                        <span className="font-mono font-bold text-white">{km.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400 border-t border-slate-800/80 pt-2 italic">
+                    {kf.clinicalNote}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Identified Discrepancies */}
         <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 space-y-3">
@@ -383,6 +444,12 @@ export const SummaryReportModal: React.FC<SummaryReportModalProps> = ({ summary,
           Angular kinematic error margin is within 2.8°–4.5° MAE compared to gold-standard optical motion capture. Vertical jump power is calculated via validated Sayers ($60.7\cdot h + 45.3\cdot m - 2055$) and Harman formulas. For optimal laboratory-grade precision, ensure a perpendicular camera view at 2.0–3.0m distance and 60+ FPS.
         </div>
       </div>
+
+      {/* Session History & Before/After Comparison Modal */}
+      <SessionHistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+      />
     </div>
   );
 };
